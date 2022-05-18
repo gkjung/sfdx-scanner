@@ -1,4 +1,4 @@
-import {Logger, Messages, SfdxError} from '@salesforce/core';
+import {Logger, Messages, SfdxError, Lifecycle} from '@salesforce/core';
 import * as assert from 'assert';
 import {Stats} from 'fs';
 import {inject, injectable} from 'tsyringe';
@@ -21,6 +21,12 @@ const messages = Messages.loadMessages('@salesforce/sfdx-scanner', 'DefaultRuleM
 type RunDescriptor = {
 	engine: RuleEngine;
 	descriptor: EngineExecutionDescriptor;
+};
+
+type TelemetryData = {
+	eventName: string;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	[key: string]: any;
 };
 
 @injectable()
@@ -109,7 +115,7 @@ export class DefaultRuleManager implements RuleManager {
 		}
 
 		this.validateRunDescriptors(runDescriptorList);
-
+		await this.emitRunTelemetry(runDescriptorList);
 		// Warn the user if any positive targets were skipped
 		const unmatchedTargets = targets.filter(t => !t.startsWith('!') && !matchedTargets.has(t));
 
@@ -141,6 +147,21 @@ export class DefaultRuleManager implements RuleManager {
 		if (dfaEngines.length > 0 && pathlessEngines.length > 0) {
 			throw new SfdxError(messages.getMessage(`Pathless engines ${JSON.stringify(pathlessEngines)} cannot be run concurrently with DFA engines ${JSON.stringify(dfaEngines)}`));
 		}
+	}
+
+	protected async emitRunTelemetry(runDescriptorList: RunDescriptor[]): Promise<void> {
+		const runTelemetryObject: TelemetryData = {
+			eventName: 'ENGINE_EXECUTION'
+		};
+
+		const executedEngineNames: Set<string> = new Set(runDescriptorList.map(d => d.engine.getName().toLowerCase()));
+
+		const allEngines: RuleEngine[] = await Controller.getAllEngines();
+		for (const engine of allEngines) {
+			const engineName = engine.getName().toLowerCase();
+			runTelemetryObject[engineName] = executedEngineNames.has(engineName);
+		}
+		await Lifecycle.getInstance().emitTelemetry(runTelemetryObject);
 	}
 
 	protected async resolveEngineFilters(filters: RuleFilter[], engineOptions: Map<string,string> = new Map()): Promise<RuleEngine[]> {
