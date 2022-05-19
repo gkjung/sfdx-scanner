@@ -234,7 +234,7 @@ export default class Run extends ScannerCommand {
 		if (lastPeriod < 1 || lastPeriod + 1 === outfile.length) {
 			throw new SfdxError(messages.getMessage('validations.outfileMustBeValid'), null, null, this.getInternalErrorCode());
 		} else {
-			const fileExtension = outfile.slice(lastPeriod + 1);
+			const fileExtension = outfile.slice(lastPeriod + 1).toLowerCase();
 			switch (fileExtension) {
 				case OUTPUT_FORMAT.CSV:
 				case OUTPUT_FORMAT.HTML:
